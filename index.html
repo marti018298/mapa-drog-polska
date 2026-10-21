@@ -16,7 +16,7 @@ header{display:flex;justify-content:space-between;align-items:center;gap:10px;ba
 </head>
 <body>
 <header><div class="brand"><div class="brandlogo" aria-hidden="true">🛣️</div><div><div class="brandname">DROGI<span>PL</span></div><div class="sub">CENTRUM INFRASTRUKTURY DROGOWEJ • PROTOTYP</div></div></div><div class="topright"><span class="scope">● CAŁA POLSKA</span><div id="clock"></div></div></header>
-<div class="app">
+<nav style="display:flex;gap:8px;padding:8px 14px;background:#12283c;flex-wrap:wrap"><a href="#kamery-drogowe" style="background:#166f5b;color:#fff;border-radius:9px;padding:10px 14px;text-decoration:none;font-weight:700">📹 Kamery drogowe ↓</a><a href="https://drogi.gddkia.gov.pl/mapy/mapa-informacji-drogowej" target="_blank" rel="noopener noreferrer" style="border:1px solid #57738c;color:#e8f4ff;border-radius:9px;padding:10px 14px;text-decoration:none">GDDKiA ↗</a></nav><div class="app">
 <aside class="side">
 <section class="section"><h2 class="sectiontitle">01 / Wybierz obszar</h2>
 <select id="region" class="formcontrol" aria-label="Wybierz województwo"><option value="polska">🇵🇱 Cała Polska</option><option value="dolnoslaskie">dolnośląskie</option><option value="kujawsko-pomorskie">kujawsko-pomorskie</option><option value="lubelskie">lubelskie</option><option value="lubuskie">lubuskie</option><option value="lodzkie">łódzkie</option><option value="malopolskie">małopolskie</option><option value="mazowieckie">mazowieckie</option><option value="opolskie">opolskie</option><option value="podkarpackie">podkarpackie</option><option value="podlaskie">podlaskie</option><option value="pomorskie">pomorskie</option><option value="slaskie">śląskie</option><option value="swietokrzyskie">świętokrzyskie</option><option value="warminsko-mazurskie">warmińsko-mazurskie</option><option value="wielkopolskie">wielkopolskie</option><option value="zachodniopomorskie">zachodniopomorskie</option></select>
@@ -40,7 +40,7 @@ header{display:flex;justify-content:space-between;align-items:center;gap:10px;ba
 <div class="statrow"><div class="stat"><strong id="count">0</strong><span>Pobrane obiekty OSM</span></div><div class="stat"><strong id="ccount">0</strong><span>Linki do kamer</span></div></div>
 <div class="cols"><button id="export" class="btn secondary">↓ Eksport GeoJSON</button><button id="clear" class="btn secondary">Wyczyść dane</button></div>
 </section>
-<section class="section"><h2 class="sectiontitle">03 / Kamery drogowe</h2><p class="hint">Przybliż mapę do poziomu 9 lub wyżej, a następnie wyszukaj lokalizacje kamer w widocznym obszarze. Oznaczenia OSM nie gwarantują transmisji na żywo.</p><button id="findcams" class="btn full" style="margin-bottom:10px">📹 Znajdź kamery w tym obszarze</button><div id="camera-results" class="hint" role="status" aria-live="polite">Wybierz obszar na mapie i wyszukaj kamery.</div>
+<section class="section" id="kamery-drogowe"><h2 class="sectiontitle">03 / Kamery drogowe</h2><p class="hint">Przybliż mapę do poziomu 9 lub wyżej, a następnie wyszukaj lokalizacje kamer w widocznym obszarze. Oznaczenia OSM nie gwarantują transmisji na żywo. Jeśli serwery są niedostępne, możesz skorzystać z oficjalnej mapy GDDKiA poniżej.</p><button id="findcams" class="btn full" style="margin-bottom:10px">📹 Znajdź kamery w tym obszarze</button><div id="camera-results" class="hint" role="status" aria-live="polite">Wybierz obszar na mapie i wyszukaj kamery.</div>
 <a class="source" target="_blank" rel="noopener noreferrer" href="https://drogi.gddkia.gov.pl/mapy/mapa-informacji-drogowej">📷 Otwórz kamery i utrudnienia GDDKiA ↗<small>Źródłowa mapa oficjalna</small></a>
 <label class="visually-hidden" for="camname">Nazwa kamery</label><input id="camname" class="formcontrol" placeholder="Nazwa, np. S8 – węzeł" maxlength="100" style="margin-top:10px">
 <label class="visually-hidden" for="camurl">Adres HTTPS kamery</label><input id="camurl" type="url" class="formcontrol" placeholder="https://adres-kamery.pl/…" style="margin-top:8px">
@@ -168,7 +168,7 @@ async function findCameras(){
    if(!response.ok)throw Error('HTTP '+response.status);
    const data=await response.json(),unique=new Set(),cameras=[];
    for(const o of data.elements||[]){const id=o.type+'/'+o.id;if(unique.has(id)||!coordsOf(o).length)continue;unique.add(id);cameras.push({o,group:'camera_osm'});}
-   features=features.filter(f=>f.group!=='camera_osm').concat(cameras);updateCounts();render();
+   features=features.filter(f=>f.group!=='camera_osm').concat(cameras);try{localStorage.setItem('drogiPL.osmCamerasCache.v1',JSON.stringify({time:Date.now(),elements:data.elements||[]}));}catch{}updateCounts();render();
    results.replaceChildren();
    const info=document.createElement('p');info.textContent='Znaleziono '+cameras.length+' lokalizacji kamer. Kliknij nazwę, aby przejść do punktu.';results.append(info);
    const list=document.createElement('div');list.style.maxHeight='260px';list.style.overflowY='auto';
@@ -181,7 +181,7 @@ async function findCameras(){
    results.append(list);setNotice('Znaleziono '+cameras.length+' lokalizacji kamer na wybranym obszarze.','good');error=null;break;
   }catch(e){error=e;}
  }
- if(error){results.textContent='Serwery lokalizacji kamer nie odpowiedziały. Spróbuj ponownie później. Podkład mapy działa niezależnie.';setNotice(results.textContent,'warn');}
+ if(error){let saved=null;try{saved=JSON.parse(localStorage.getItem('drogiPL.osmCamerasCache.v1')||'null');}catch{}if(saved&&Array.isArray(saved.elements)&&Date.now()-saved.time<7*86400000){const seen=new Set(),cached=[];for(const o of saved.elements){const id=o.type+'/'+o.id;if(seen.has(id)||!coordsOf(o).length)continue;seen.add(id);cached.push({o,group:'camera_osm'});}features=features.filter(f=>f.group!=='camera_osm').concat(cached);updateCounts();render();results.textContent='Serwery chwilowo niedostępne. Pokazuję '+cached.length+' lokalizacji z poprzedniego wyszukiwania (dane zapisane w tej przeglądarce).';setNotice(results.textContent,'warn');}else{results.textContent='Serwery lokalizacji kamer nie odpowiedziały. Otwórz oficjalną mapę GDDKiA poniżej albo spróbuj później.';setNotice('Mapa działa. Usługa lokalizacji kamer OSM jest obecnie niedostępna.','warn');}}
  button.disabled=false;button.textContent='📹 Znajdź kamery w tym obszarze';
 }
 el('findcams').onclick=findCameras;
