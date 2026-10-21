@@ -148,7 +148,7 @@ for(const input of document.querySelectorAll('input[data-layer]'))input.onchange
 async function loadObjects(){if(loadingObjects)return;const {w,h}=wsize();const sw=fromScreen(0,h),ne=fromScreen(w,0);if(state.zoom<10||(ne.lon-sw.lon)*(ne.lat-sw.lat)>.6){setNotice('Przybliż fragment mapy do poziomu 10 lub wyżej. Nie pobieramy całego kraju jednym zapytaniem.','warn');return;}
  clearItems();loadingObjects=true;el('load').disabled=true;setNotice('Pobieram obiekty infrastruktury z OpenStreetMap…');const bbox=[sw.lat,sw.lon,ne.lat,ne.lon].map(v=>v.toFixed(5)).join(',');
  const q=`[out:json][timeout:25];(node["highway"="traffic_signals"](${bbox});way["bridge"]["highway"](${bbox});way["tunnel"]["highway"](${bbox});way["highway"="construction"](${bbox});way["construction"]["highway"](${bbox});way["highway"~"^(motorway|trunk|primary|secondary)$"](${bbox});node["highway"="motorway_junction"](${bbox});node["railway"="level_crossing"](${bbox});node["amenity"="fuel"](${bbox});way["amenity"="fuel"](${bbox});node["highway"="services"](${bbox});way["highway"="services"](${bbox}););out center geom;`;
- let err=null;for(const endpoint of ['https://overpass.kumi.systems/api/interpreter','https://overpass-api.de/api/interpreter']){abortController=new AbortController();const timer=setTimeout(()=>abortController.abort(),22000);try{const r=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'},body:new URLSearchParams({data:q}),signal:abortController.signal});if(!r.ok)throw Error('HTTP '+r.status);const data=await r.json();const seen=new Set();features=[];for(const o of data.elements||[]){const g=groupOf(o),key=o.type+'/'+o.id;if(!g||seen.has(key)||!coordsOf(o).length)continue;seen.add(key);if(features.length>=3500)break;features.push({o,group:g});}updateCounts();render();setNotice('Pobrano '+features.length.toLocaleString('pl-PL')+' obiektów OSM. To dane o infrastrukturze, a nie aktualny ruch.','good');err=null;break;}catch(e){err=e;}finally{clearTimeout(timer);}}
+ let err=null;for(const endpoint of ['https://overpass-api.de/api/interpreter','https://overpass.private.coffee/api/interpreter']){abortController=new AbortController();const timer=setTimeout(()=>abortController.abort(),22000);try{const r=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'},body:new URLSearchParams({data:q}),signal:abortController.signal});if(!r.ok)throw Error('HTTP '+r.status);const data=await r.json();const seen=new Set();features=[];for(const o of data.elements||[]){const g=groupOf(o),key=o.type+'/'+o.id;if(!g||seen.has(key)||!coordsOf(o).length)continue;seen.add(key);if(features.length>=3500)break;features.push({o,group:g});}updateCounts();render();setNotice('Pobrano '+features.length.toLocaleString('pl-PL')+' obiektów OSM. To dane o infrastrukturze, a nie aktualny ruch.','good');err=null;break;}catch(e){err=e;}finally{clearTimeout(timer);}}
  if(err)setNotice('Nie udało się pobrać obiektów. Serwer OSM może być niedostępny lub blokowany przez przeglądarkę. Podkład mapy nadal działa niezależnie.','warn');abortController=null;loadingObjects=false;el('load').disabled=false;}
 el('load').onclick=loadObjects;
 async function findCameras(){
@@ -159,10 +159,11 @@ async function findCameras(){
  const bbox=[sw.lat,sw.lon,ne.lat,ne.lon].map(v=>v.toFixed(5)).join(',');
  const q='[out:json][timeout:25];(nwr["man_made"="surveillance"]["surveillance"="camera"]('+bbox+');nwr["man_made"="surveillance"]["surveillance:type"="camera"]('+bbox+');nwr["man_made"="surveillance"]["surveillance:zone"="traffic"]('+bbox+'););out center;';
  button.disabled=true;button.textContent='⏳ Szukam kamer…';results.textContent='Łączę z OpenStreetMap…';
- let error=null;
- for(const endpoint of ['https://overpass.kumi.systems/api/interpreter','https://overpass-api.de/api/interpreter']){
+ let error=null,attempt=0;
+ for(const endpoint of ['https://overpass-api.de/api/interpreter','https://overpass.private.coffee/api/interpreter']){
   try{
-   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),22000);let response;
+   attempt++;results.textContent='Sprawdzam źródło kamer '+attempt+'/2. Może to potrwać kilkanaście sekund…';
+   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),14000);let response;
    try{response=await fetch(endpoint,{method:'POST',body:new URLSearchParams({data:q}),signal:controller.signal});}finally{clearTimeout(timer);}
    if(!response.ok)throw Error('HTTP '+response.status);
    const data=await response.json(),unique=new Set(),cameras=[];
@@ -180,7 +181,7 @@ async function findCameras(){
    results.append(list);setNotice('Znaleziono '+cameras.length+' lokalizacji kamer na wybranym obszarze.','good');error=null;break;
   }catch(e){error=e;}
  }
- if(error){results.textContent='Nie udało się pobrać kamer. Spróbuj później lub zmień obszar mapy.';setNotice(results.textContent,'warn');}
+ if(error){results.textContent='Serwery lokalizacji kamer nie odpowiedziały. Spróbuj ponownie później. Podkład mapy działa niezależnie.';setNotice(results.textContent,'warn');}
  button.disabled=false;button.textContent='📹 Znajdź kamery w tym obszarze';
 }
 el('findcams').onclick=findCameras;
